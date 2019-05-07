@@ -1,16 +1,17 @@
 {
     "type": "package",
     "name": "justgook/elm-logic",
-    "summary": "A library for building decoders for Tiled levels.",
+    "summary": "An ECS library for Elm. Provides an easy way to build a full game, using common Entity-Component-System architecture.",
     "license": "BSD-3-Clause",
     "version": "1.0.0",
     "exposed-modules": [
-        "Tiled",
-        "Tiled.Level",
-        "Tiled.Layer",
-        "Tiled.Tileset",
-        "Tiled.Object",
-        "Tiled.Properties"
+        "Logic.System",
+        "Logic.Launcher",
+        "Logic.GameFlow",
+        "Logic.Environment",
+        "Logic.Entity",
+        "Logic.Component.Singleton",
+        "Logic.Component"
     ],
     "elm-version": "0.19.0 <= v < 0.20.0",
     "dependencies": {
