@@ -2,8 +2,7 @@ module Logic.Entity exposing
     ( EntityID, create, with
     , fromList, toList
     , fromDict, toDict
-    , get, get2, removeFor
-    , update
+    , get, get2, removeFor, update
     )
 
 {-|
@@ -23,7 +22,7 @@ module Logic.Entity exposing
 
 # Manipulations
 
-@docs get, get2, removeFor
+@docs get, get2, removeFor, update
 
 -}
 
@@ -44,7 +43,7 @@ type alias ComponentSpec comp world =
 
 {-| Start point for spawning entity
 
-    Entity.create ( id, world )
+    Entity.create id world
         |> Entity.with ( positionSpec, positionComponent )
         |> Entity.with ( velocitySpec, velocityComponent )
 
@@ -97,7 +96,7 @@ get i =
     Array.get i >> Maybe.withDefault Nothing
 
 
-{-| Components Tuple for Entity by id
+{-| Components Tuple for `Entity` by `id`
 -}
 get2 : EntityID -> Component.Set comp -> Component.Set comp2 -> Maybe ( comp, comp2 )
 get2 i set1 set2 =

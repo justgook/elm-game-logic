@@ -1,18 +1,20 @@
 module Logic.Launcher exposing
-    ( document, task, worker
-    , Message, Document, Error(..), Launcher, World
+    ( document, documentWith, worker, workerWith
     , inline
+    , async, sync
+    , Document, DocumentWith, Error(..), Launcher, World, Message
     )
 
 {-|
 
-@docs document, task, worker
-@docs Message, Document, Error, Launcher, World
+@docs document, documentWith, worker, workerWith
 @docs inline
+@docs async, sync
+@docs Document, DocumentWith, Error, Launcher, World, Message
 
 -}
 
-import Browser exposing (Document, UrlRequest(..))
+import Browser
 import Browser.Events as Browser
 import Html exposing (Html)
 import Logic.GameFlow
@@ -34,47 +36,89 @@ type alias World world =
 {-| -}
 type Message world
     = Frame Float
-    | Subscription (World world)
+    | Subscription ( world, Cmd (Message world) )
     | Resource (Model world)
-    | Event (World world -> World world)
+    | Event (world -> world)
 
 
 type Model world
     = Loading
-    | Succeed (World world)
+    | Succeed world
     | Fail Error
 
 
 {-| -}
 type alias Launcher flags world =
-    Program flags (Model world) (Message world)
+    Program flags (Model (World world)) (Message (World world))
 
 
-{-| difference from `Browser.document`:
-
-1.  `init` takes as argument flags and returns Task, that results in world or fail (90% of games any way need get some data to start, images, level data, connection, etc.)
-2.  `subscriptions` instead of returning msg - should return new `World`
-3.  `update` have no `Msg` input
-4.  `view` instead of `Msg` event have to return function
-
--}
+{-| -}
 type alias Document flags world =
     { init : flags -> Task.Task Error (World world)
+    , update : World world -> World world
+    , view : World world -> List (Html.Html (World world -> World world))
     , subscriptions : World world -> Sub (World world)
-    , update : World world -> ( World world, Cmd (Message world) )
-    , view : World world -> List (Html (World world -> World world))
     }
 
 
-{-| Main entry point, but have few difference from `Browser.document`
+{-| Same as `document` but `subscriptions` and `update` returns also `Cmd` - useful for `ports`
 -}
-document : Document flags (World world) -> Launcher flags (World world)
+type alias DocumentWith flags world =
+    { init : flags -> ( Task.Task Error (World world), Cmd (Message (World world)) )
+    , subscriptions : World world -> Sub ( World world, Cmd (Message (World world)) )
+    , update : World world -> ( World world, Cmd (Message (World world)) )
+    , view : World world -> List (Html.Html (World world -> World world))
+    }
+
+
+{-| Main entry point, but have few difference from `Browser.document`:
+
+1.  `init` takes as argument flags and returns Task, that results in world or fail (90% of games any way need get some data to start, images, level data, connection, etc.)
+2.  `subscriptions` instead of returning msg - should return new `World`
+3.  `update` have no `Msg` input and returns just `World`
+4.  `view` instead of `Msg` event have to return function
+
+-}
+document : Document flags world -> Launcher flags world
 document { init, update, view, subscriptions } =
+    let
+        updateBody delta world =
+            ( Logic.GameFlow.update update delta world
+                |> Succeed
+            , Cmd.none
+            )
+    in
     Browser.document
-        { init = init_ init
-        , view = view_ view
-        , update = update_ update
-        , subscriptions = subscriptions_ subscriptions
+        { init = initWrap init
+        , view = viewWrap view
+        , update = updateWrap updateBody
+        , subscriptions = subscriptionsWrap (\w -> Subscription ( w, Cmd.none )) subscriptions
+        }
+
+
+{-| Same as [`Launcher.document`](#document) but `init`, `subscriptions` and `update` returns also `Cmd` (useful for `ports`)
+-}
+documentWith : DocumentWith flags world -> Launcher flags world
+documentWith { init, update, view, subscriptions } =
+    let
+        updateBody delta world =
+            Logic.GameFlow.updateWith (updateWrapper update) delta ( world, [] )
+                |> Tuple.mapBoth Succeed Cmd.batch
+
+        initBody flags =
+            let
+                ( a, b ) =
+                    init flags
+            in
+            ( Loading
+            , Cmd.batch [ b, load a ]
+            )
+    in
+    Browser.document
+        { init = initBody
+        , view = viewWrap view
+        , update = updateWrap updateBody
+        , subscriptions = subscriptionsWrap Subscription subscriptions
         }
 
 
@@ -82,14 +126,17 @@ document { init, update, view, subscriptions } =
 -}
 inline :
     { a
-        | update : World world -> ( World world, Cmd (Message world) )
-        , view : world -> List (Html (World world -> World world))
-        , subscriptions : world -> Sub (World world)
+        | update : World b -> World b
+        , view : d -> List (Html.Html (world -> world))
+        , subscriptions : c -> Sub world1
     }
     ->
-        { view : world -> List (Html (Message world))
-        , update : Message world -> World world -> ( World world, Cmd (Message world) )
-        , subscriptions : world -> Sub (Message world)
+        { subscriptions : c -> Sub (Message world1)
+        , update :
+            Message (World b)
+            -> World b
+            -> ( World b, Cmd (Message (World b)) )
+        , view : d -> List (Html.Html (Message world))
         }
 inline { update, view, subscriptions } =
     { view = viewSucceed_ view
@@ -98,41 +145,78 @@ inline { update, view, subscriptions } =
     }
 
 
-{-| Main entry point, but have few difference from `Platform.worker`
+{-| Main entry point, similar to `Platform.worker`
 -}
 worker :
     { init : flags -> Task.Task Error (World world)
     , subscriptions : World world -> Sub (World world)
-    , update : World world -> ( World world, Cmd (Message world) )
+    , update : World world -> World world
     }
     -> Launcher flags world
 worker { init, update, subscriptions } =
+    let
+        aaa delta world =
+            ( Logic.GameFlow.update update delta world
+                |> Succeed
+            , Cmd.none
+            )
+    in
     Platform.worker
-        { init = init_ init
-        , update = update_ update
-        , subscriptions = subscriptions_ subscriptions
+        { init = initWrap init
+        , update = updateWrap aaa
+        , subscriptions = subscriptionsWrap (\w -> Subscription ( w, Cmd.none )) subscriptions
+        }
+
+
+{-| Same as [`Launcher.worker`](#worker), but `init`, `subscriptions` and `update` returns also `Cmd` (useful for `ports`)
+-}
+workerWith :
+    { init : flags -> Task.Task Error (World world)
+    , subscriptions : World world -> Sub (World world)
+    , update :
+        World world
+        -> ( World world, Cmd (Message (World world)) )
+    }
+    -> Launcher flags world
+workerWith { init, update, subscriptions } =
+    let
+        aaa delta world =
+            Logic.GameFlow.updateWith (updateWrapper update) delta ( world, [] )
+                |> Tuple.mapBoth Succeed Cmd.batch
+    in
+    Platform.worker
+        { init = initWrap init
+        , update = updateWrap aaa
+        , subscriptions = subscriptionsWrap (\w -> Subscription ( w, Cmd.none )) subscriptions
         }
 
 
 {-| Helper function, that allow convert `Task` into Cmd - for loading new `World` after `init`
 -}
-task : (Result x a -> World world -> World world) -> Task.Task x a -> Cmd (Message world)
-task f t =
+async : (Result x a -> world -> world) -> Task.Task x a -> Cmd (Message world)
+async f t =
     Task.attempt (f >> Event) t
 
 
-init_ :
-    (flags -> Task.Task Error (World world))
-    -> flags
-    -> ( Model world1, Cmd (Message world) )
-init_ init flags =
+{-| Wrapper for messages, when using libs like `Random`
+
+    Random.generate (\seed -> Launcher.event (\w -> { w | seed = seed })) Random.independentSeed
+
+-}
+sync : (world -> world) -> Message world
+sync =
+    Event
+
+
+initWrap : (flags -> Task.Task Error world) -> flags -> ( Model world, Cmd (Message world) )
+initWrap init flags =
     ( Loading
-    , load_ (init flags)
+    , load (init flags)
     )
 
 
-load_ : Task.Task Error (World world) -> Cmd (Message world)
-load_ task_ =
+load : Task.Task Error world -> Cmd (Message world)
+load task_ =
     let
         initTask =
             task_
@@ -149,15 +233,13 @@ load_ task_ =
     initTask
 
 
-subscriptions_ :
-    (World world1 -> Sub (World world))
-    -> Model world1
-    -> Sub (Message world)
-subscriptions_ subscriptions model_ =
+subscriptionsWrap : (a -> Message world) -> (b -> Sub a) -> Model b -> Sub (Message world)
+subscriptionsWrap mapper subscriptions model_ =
     case model_ of
         Succeed world ->
             [ Browser.onAnimationFrameDelta Frame
-            , subscriptions world |> Sub.map Subscription
+            , subscriptions world
+                |> Sub.map mapper
             ]
                 |> Sub.batch
 
@@ -168,25 +250,27 @@ subscriptions_ subscriptions model_ =
             Sub.none
 
 
+subscriptionsSucceed_ : (b -> Sub a) -> b -> Sub (Message a)
 subscriptionsSucceed_ subscriptions world =
     [ Browser.onAnimationFrameDelta Frame
-    , subscriptions world |> Sub.map Subscription
+    , subscriptions world
+        |> Sub.map (\w -> Subscription ( w, Cmd.none ))
     ]
         |> Sub.batch
 
 
-update_ :
-    (World world -> ( World world, Cmd (Message world) ))
+updateWrap :
+    (Float -> world -> ( Model world, Cmd (Message world) ))
     -> Message world
     -> Model world
     -> ( Model world, Cmd (Message world) )
-update_ update msg model =
+updateWrap update msg model =
     case ( msg, model ) of
         ( Frame delta, Succeed world ) ->
-            Logic.GameFlow.updateWith (updateWrapper update) delta ( world, [] ) |> Tuple.mapBoth Succeed Cmd.batch
+            update delta world
 
-        ( Subscription custom, _ ) ->
-            ( Succeed custom, Cmd.none )
+        ( Subscription ( custom, cmd ), _ ) ->
+            ( Succeed custom, cmd )
 
         ( Event f, Succeed world ) ->
             ( Succeed (f world), Cmd.none )
@@ -201,17 +285,21 @@ update_ update msg model =
             ( model, Cmd.none )
 
 
+updateSucceed_ :
+    (World world -> World world)
+    -> Message (World world)
+    -> World world
+    -> ( World world, Cmd (Message (World world)) )
 updateSucceed_ update msg world =
     case msg of
         Frame delta ->
-            Logic.GameFlow.updateWith (updateWrapper update) delta ( world, [] )
-                |> Tuple.mapSecond Cmd.batch
+            ( Logic.GameFlow.update update delta world, Cmd.none )
 
         Event f ->
             ( f world, Cmd.none )
 
-        Subscription custom ->
-            ( custom, Cmd.none )
+        Subscription ( custom, cmd ) ->
+            ( custom, cmd )
 
         Resource (Succeed resource) ->
             ( resource, Cmd.none )
@@ -220,27 +308,15 @@ updateSucceed_ update msg world =
             ( world, Cmd.none )
 
 
-updateWrapper :
-    (World world -> ( World world, Cmd (Message world) ))
-    -> ( World world, List (Cmd (Message world)) )
-    -> ( World world, List (Cmd (Message world)) )
 updateWrapper update ( w, cmd ) =
     Tuple.mapSecond (\a -> a :: cmd) (update w)
 
 
-view_ :
-    (World world
-     -> List (Html (World world -> World world))
-    )
-    -> Model world
-    ->
-        { body : List (Html (Message world))
-        , title : String
-        }
-view_ view model =
+viewWrap : (world -> List (Html (world -> world))) -> Model world -> Browser.Document (Message world)
+viewWrap view model =
     case model of
         Succeed world ->
-            { title = "Success"
+            { title = "Game"
             , body =
                 view world |> List.map (Html.map Event)
             }
@@ -255,6 +331,6 @@ view_ view model =
             }
 
 
-viewSucceed_ : (world -> List (Html (World world -> World world))) -> world -> List (Html (Message world))
+viewSucceed_ : (b -> List (Html (world -> world))) -> b -> List (Html (Message world))
 viewSucceed_ view world =
     view world |> List.map (Html.map Event)

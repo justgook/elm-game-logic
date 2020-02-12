@@ -1,8 +1,12 @@
-module Logic.Component exposing (Set, Spec, empty, remove, set, spawn)
+module Logic.Component exposing
+    ( Set, Spec, empty, spawn, set, remove
+    , CustomSpec
+    )
 
 {-|
 
-@docs Set, Spec, empty, remove, set, spawn
+@docs Set, Spec, empty, spawn, set, remove
+@docs CustomSpec
 
 -}
 
@@ -20,10 +24,30 @@ type alias EntityID =
 
 
 {-| Component specification, how to get `Component.Set` from world and set back into world (mainly used by Systems)
+
+    type alias Velocity =
+        { x : Float, y : Float }
+
+    spec : Component.Spec Velocity { world | velocity : Component.Set Velocity }
+    spec =
+        Component.Spec .velocity (\comps world -> { world | velocity = comps })
+
+    empty : Component.Set Velocity
+    empty =
+        Component.empty
+
 -}
 type alias Spec comp world =
     { get : world -> Set comp
     , set : Set comp -> world -> world
+    }
+
+
+{-| Same as `Component.Spec` but `set` and `get` can return to different _worlds_
+-}
+type alias CustomSpec comp getWorld setWorld =
+    { get : getWorld -> Set comp
+    , set : Set comp -> setWorld -> setWorld
     }
 
 
