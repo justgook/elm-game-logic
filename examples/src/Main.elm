@@ -1,52 +1,44 @@
 module Main exposing (main)
 
-import Browser.Dom
+import Browser
 import Browser.Events
 import Html exposing (..)
 import Html.Attributes exposing (style)
 import Logic.Component as Component
 import Logic.Entity as Entity
-import Logic.GameFlow exposing (GameFlow(..))
-import Logic.Launcher as Launcher exposing (Launcher)
-import Logic.System as System exposing (applyIf)
-import Process
-import Task
+import Logic.System as System exposing (System, applyIf)
 
 
-main : Launcher () World
+main : Program () World Float
 main =
-    Launcher.document game
+    Browser.element
+        { init = \_ -> ( spawn world, Cmd.none )
+        , update = \_ w -> ( system velocitySpec positionSpec w, Cmd.none )
+        , subscriptions = \_ -> Browser.Events.onAnimationFrameDelta identity
+        , view =
+            \w ->
+                System.foldl
+                    (\( px, py ) acc ->
+                        div
+                            [ style "width" "30px"
+                            , style "height" "30px"
+                            , style "position" "absolute"
+                            , style "top" "0"
+                            , style "left" "0"
+                            , style "background" "red"
+                            , style "transform" ("translate(" ++ String.fromInt px ++ "px, " ++ String.fromInt py ++ "px)")
+                            ]
+                            []
+                            :: acc
+                    )
+                    (positionSpec.get w)
+                    []
+                    |> div []
+        }
 
 
-game : Launcher.Document flags World
-game =
-    { init =
-        \_ ->
-            Process.sleep 0 |> Task.map (\_ -> spawn world)
-    , subscriptions = \w -> Sub.none
-    , update = \w -> ( system velocitySpec positionSpec w, Cmd.none )
-    , view =
-        \w ->
-            System.foldl
-                (\( px, py ) acc ->
-                    div
-                        [ style "width" "30px"
-                        , style "height" "30px"
-                        , style "position" "absolute"
-                        , style "top" "0"
-                        , style "left" "0"
-                        , style "background" "red"
-                        , style "transform" ("translate(" ++ String.fromInt px ++ "px, " ++ String.fromInt py ++ "px)")
-                        ]
-                        []
-                        :: acc
-                )
-                (positionSpec.get w)
-                []
-    }
-
-
-system =
+system : Component.Spec ( Int, Int ) World -> Component.Spec ( Int, Int ) World -> System World
+system spec1 spec2 w =
     System.step2
         (\( ( vx, vy ), setVel ) ( ( px, py ), setPos ) acc ->
             let
@@ -59,63 +51,50 @@ system =
             acc
                 |> setPos ( x, y )
                 |> applyIf (x < 0) (setVel ( abs vx, vy ))
-                |> applyIf (x > 300) (setVel ( abs vx * -1, vy ))
+                |> applyIf (x > w.windowWidth) (setVel ( abs vx * -1, vy ))
                 |> applyIf (y < 0) (setVel ( vx, abs vy ))
-                |> applyIf (y > 300) (setVel ( vx, abs vy * -1 ))
+                |> applyIf (y > w.windowHeight) (setVel ( vx, abs vy * -1 ))
         )
+        spec1
+        spec2
+        w
 
 
 type alias World =
-    Launcher.World
-        { position : Component.Set ( Int, Int )
-        , velocity : Component.Set ( Int, Int )
-        , windowWidth : Int
-        , windowHeight : Int
-        }
+    { position : Component.Set ( Int, Int )
+    , velocity : Component.Set ( Int, Int )
+    , windowWidth : Int
+    , windowHeight : Int
+    }
 
 
 world : World
 world =
-    { frame = 0
-    , runtime_ = 0
-    , flow = Running
-    , position = Component.empty
+    { position = Component.empty
     , velocity = Component.empty
-    , windowWidth = 0
-    , windowHeight = 0
+    , windowWidth = 800
+    , windowHeight = 600
     }
 
 
+spawn : World -> World
 spawn w_ =
     List.range 0 10
         |> List.foldl
-            (\i w ->
-                w
-                    |> Entity.create i
-                    |> Entity.with ( positionSpec, ( i * 3, i * 5 ) )
-                    |> Entity.with ( velocitySpec, ( modBy 3 i + 1, modBy 5 i + 1 ) )
-                    |> Tuple.second
+            (\i ->
+                Entity.create i
+                    >> Entity.with ( positionSpec, ( i * 3, i * 5 ) )
+                    >> Entity.with ( velocitySpec, ( modBy 3 i + 1, modBy 5 i + 1 ) )
+                    >> Tuple.second
             )
             w_
-        |> Entity.create 11
-        |> Entity.with ( positionSpec, ( 100, 100 ) )
-        |> Entity.with ( velocitySpec, ( -1, -1 ) )
-        |> Tuple.second
-        |> Entity.create 12
-        |> Entity.with ( positionSpec, ( 200, 200 ) )
-        |> Entity.with ( velocitySpec, ( -1, -2 ) )
-        |> Tuple.second
 
 
 positionSpec : Component.Spec ( Int, Int ) { world | position : Component.Set ( Int, Int ) }
 positionSpec =
-    { get = .position
-    , set = \comps w -> { w | position = comps }
-    }
+    Component.Spec .position (\comps w -> { w | position = comps })
 
 
 velocitySpec : Component.Spec ( Int, Int ) { world | velocity : Component.Set ( Int, Int ) }
 velocitySpec =
-    { get = .velocity
-    , set = \comps w -> { w | velocity = comps }
-    }
+    Component.Spec .velocity (\comps w -> { w | velocity = comps })

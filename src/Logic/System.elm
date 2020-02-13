@@ -1,44 +1,37 @@
 module Logic.System exposing
     ( System
-    , step, step2, step3, step4
-    , foldl, foldl2, foldl3, foldl4
-    , indexedFoldl, indexedFoldl2, indexedFoldl3
-    , map, filterMap
+    , update, step, step2, step3, step4, step5
+    , foldl, foldl2, foldl3, foldl4, foldl5
+    , indexedFoldl, indexedFoldl2, indexedFoldl3, indexedFoldl4, indexedFoldl5
     , applyIf, applyMaybe
-    , UnfinishedSystem, start, andMap, end, endCustom
-    , SetsReducer2, SetsReducer3, SetsReducer4
     )
 
-{-| Main logic driver is `System` that is what used to step each game-loop and update `World`
+{-| **System**: main logic driver, that is used to step on each game-loop and update `World`
 
 @docs System
-@docs step, step2, step3, step4
+@docs update, step, step2, step3, step4, step5
 
-@docs foldl, foldl2, foldl3, foldl4
-@docs indexedFoldl, indexedFoldl2, indexedFoldl3
-@docs map, filterMap
+@docs foldl, foldl2, foldl3, foldl4, foldl5
+@docs indexedFoldl, indexedFoldl2, indexedFoldl3, indexedFoldl4, indexedFoldl5
 
 
 # Util
 
 @docs applyIf, applyMaybe
 
-
-# Custom Systems
-
-@docs UnfinishedSystem, start, andMap, end, endCustom
-
-
-# Helper types
-
-@docs SetsReducer2, SetsReducer3, SetsReducer4
-
 -}
 
 import Array
 import Logic.Component as Component
-import Logic.Entity as Entity exposing (EntityID)
-import Logic.Internal exposing (indexedFoldlArray, indexedMap2)
+import Logic.Entity exposing (EntityID)
+import Logic.Internal exposing (indexedFoldlArray)
+
+
+{-| Update whole `Component.Set`
+-}
+update : Component.Spec comp world -> (Component.Set comp -> Component.Set comp) -> System world
+update spec f world =
+    spec.set (f (spec.get world)) world
 
 
 {-| -}
@@ -46,53 +39,51 @@ type alias System world =
     world -> world
 
 
-{-| -}
-type UnfinishedSystem world acc next func
-    = UnfinishedSystem
-        { acc : next -> acc
-        , apply : world -> acc -> world
-        , arrayFunction : Array.Array (Maybe func)
-        , itemsFromAcc :
-            { get : acc -> next
-            , map : (next -> next) -> acc -> acc
-            }
-        , world : world
-        }
+{-| Reduce an `Component.Set` from the left.
 
+Example count how much enemies left in world:
 
-{-| -}
+    enemySet =
+        enemySpec.get world
+
+    count =
+        foldl (\_ -> (+) 1) enemySet 0
+
+-}
 foldl : (comp1 -> acc -> acc) -> Component.Set comp1 -> acc -> acc
 foldl f comp1 acc_ =
     Array.foldl
-        (\value1 acc ->
-            value1 |> Maybe.map (\a -> f a acc) |> Maybe.withDefault acc
+        (\value acc ->
+            value |> Maybe.map (\a -> f a acc) |> Maybe.withDefault acc
         )
         acc_
         comp1
 
 
-{-| -}
+{-| Variant of `foldl` that passes the index of the current element to the step function.
+
+`indexedFoldl` is to `foldl` as `List.indexedMap` is to `List.map`.
+
+-}
 indexedFoldl : (EntityID -> comp1 -> acc -> acc) -> Component.Set comp1 -> acc -> acc
 indexedFoldl f comp1 acc_ =
     indexedFoldlArray
-        (\i value1 acc ->
-            value1 |> Maybe.map (\a -> f i a acc) |> Maybe.withDefault acc
+        (\i value acc ->
+            value |> Maybe.map (\a -> f i a acc) |> Maybe.withDefault acc
         )
         acc_
         comp1
 
 
-{-| -}
+{-| Step over all entities that have both components and reduce an `Component.Set`s from the left.
+-}
 foldl2 : (comp1 -> comp2 -> acc -> acc) -> Component.Set comp1 -> Component.Set comp2 -> acc -> acc
 foldl2 f comp1 comp2 acc_ =
     indexedFoldlArray
-        (\n value1 acc ->
-            value1
-                |> Maybe.andThen
-                    (\a ->
-                        Array.get n comp2
-                            |> (Maybe.map >> Maybe.andThen) (\b -> f a b acc)
-                    )
+        (\n value acc ->
+            Maybe.map2 (\a b -> f a b acc)
+                value
+                (Component.get n comp2)
                 |> Maybe.withDefault acc
         )
         acc_
@@ -103,69 +94,50 @@ foldl2 f comp1 comp2 acc_ =
 indexedFoldl2 : (EntityID -> comp1 -> comp2 -> acc -> acc) -> Component.Set comp1 -> Component.Set comp2 -> acc -> acc
 indexedFoldl2 f comp1 comp2 acc_ =
     indexedFoldlArray
-        (\n value1 acc ->
-            value1
-                |> Maybe.andThen
-                    (\a ->
-                        (Maybe.map >> Maybe.andThen)
-                            (\b -> f n a b acc)
-                            (Array.get n comp2)
-                    )
+        (\n value acc ->
+            Maybe.map2 (\a b -> f n a b acc)
+                value
+                (Component.get n comp2)
                 |> Maybe.withDefault acc
         )
         acc_
         comp1
 
 
-{-| -}
+{-| Same as [`foldl2`](#foldl2) only with 3 components
+-}
 foldl3 : (comp1 -> comp2 -> comp3 -> acc -> acc) -> Component.Set comp1 -> Component.Set comp2 -> Component.Set comp3 -> acc -> acc
 foldl3 f comp1 comp2 comp3 acc_ =
     indexedFoldlArray
-        (\n value1 acc ->
-            value1
-                |> Maybe.andThen
-                    (\a ->
-                        (Maybe.andThen >> Maybe.andThen)
-                            (\b ->
-                                (Maybe.map >> Maybe.andThen)
-                                    (\c ->
-                                        f a b c acc
-                                    )
-                                    (Array.get n comp3)
-                            )
-                            (Array.get n comp2)
-                    )
+        (\n value acc ->
+            Maybe.map3 (\a b c -> f a b c acc)
+                value
+                (Component.get n comp2)
+                (Component.get n comp3)
                 |> Maybe.withDefault acc
         )
         acc_
         comp1
 
 
-{-| -}
+{-| Same as [`indexedFoldl2`](#indexedFoldl2) only with 3 components
+-}
 indexedFoldl3 : (EntityID -> comp1 -> comp2 -> comp3 -> acc -> acc) -> Component.Set comp1 -> Component.Set comp2 -> Component.Set comp3 -> acc -> acc
 indexedFoldl3 f comp1 comp2 comp3 acc_ =
     indexedFoldlArray
-        (\n value1 acc ->
-            value1
-                |> Maybe.andThen
-                    (\a ->
-                        (Maybe.andThen >> Maybe.andThen)
-                            (\b ->
-                                (Maybe.map >> Maybe.andThen)
-                                    (\c ->
-                                        f n a b c acc
-                                    )
-                                    (Array.get n comp3)
-                            )
-                            (Array.get n comp2)
-                    )
+        (\n value acc ->
+            Maybe.map3 (\a b c -> f n a b c acc)
+                value
+                (Component.get n comp2)
+                (Component.get n comp3)
                 |> Maybe.withDefault acc
         )
         acc_
         comp1
 
 
-{-| -}
+{-| Same as [`foldl2`](#foldl2) only with 4 components
+-}
 foldl4 :
     (comp1 -> comp2 -> comp3 -> comp4 -> acc -> acc)
     -> Component.Set comp1
@@ -176,162 +148,121 @@ foldl4 :
     -> acc
 foldl4 f comp1 comp2 comp3 comp4 acc_ =
     indexedFoldlArray
-        (\n value1 acc ->
-            Maybe.andThen
-                (\a ->
-                    (Maybe.andThen >> Maybe.andThen)
-                        (\b ->
-                            (Maybe.andThen >> Maybe.andThen)
-                                (\c ->
-                                    (Maybe.map >> Maybe.andThen)
-                                        (\d ->
-                                            f a b c d acc
-                                        )
-                                        (Array.get n comp4)
-                                )
-                                (Array.get n comp3)
-                        )
-                        (Array.get n comp2)
-                )
-                value1
+        (\n value acc ->
+            Maybe.map4 (\a b c d -> f a b c d acc)
+                value
+                (Component.get n comp2)
+                (Component.get n comp3)
+                (Component.get n comp4)
                 |> Maybe.withDefault acc
         )
         acc_
         comp1
 
 
-{-| 3 times slower than `foldN`
+{-| Same as [`indexedFoldl2`](#indexedFoldl2) only with 4 components
 -}
-start :
-    (( comp, acc -> ( Array.Array (Maybe acc), next ) -> ( Array.Array (Maybe acc), next ) ) -> func)
-    -> Component.Spec comp world
-    -> world
-    -> UnfinishedSystem world ( Component.Set comp, next ) next func
-start f spec world =
-    let
-        componentSet =
-            spec.get world
-
-        itemsGetter =
-            Tuple.first
-
-        itemsMapper =
-            Tuple.mapFirst
-
-        valueSetter2 i value acc_ =
-            itemsMapper (Array.set i (Just value)) acc_
-    in
-    UnfinishedSystem
-        { world = world
-        , acc = \n -> ( componentSet, n )
-        , itemsFromAcc =
-            { get = Tuple.second
-            , map = Tuple.mapSecond
-            }
-        , apply = \w acc -> spec.set (itemsGetter acc) w
-        , arrayFunction =
-            Array.indexedMap (\i -> Maybe.map (\v -> f ( v, valueSetter2 i ))) componentSet
-        }
-
-
-{-| -}
-andMap :
-    Component.Spec comp world
-    -> UnfinishedSystem world acc ( Component.Set comp, next ) (( comp, comp -> acc -> acc ) -> newFunc)
-    -> UnfinishedSystem world acc next newFunc
-andMap spec (UnfinishedSystem { world, acc, apply, arrayFunction, itemsFromAcc }) =
-    let
-        componentSet =
-            spec.get world
-
-        newAcc f a b =
-            f ( a, b )
-
-        itemsGetter =
-            itemsFromAcc.get >> Tuple.first
-
-        itemsMapper =
-            Tuple.mapFirst >> itemsFromAcc.map
-
-        valueSetter2 i value acc_ =
-            itemsMapper (Array.set i (Just value)) acc_
-
-        newApply w acc_ =
-            apply w acc_ |> spec.set (itemsGetter acc_)
-
-        newFuncArray =
-            indexedMap2
-                (\i value function ->
-                    Maybe.map2 (\a b -> a ( b, valueSetter2 i )) function value
-                )
-                componentSet
-                arrayFunction
-    in
-    UnfinishedSystem
-        { world = world
-        , acc = newAcc acc componentSet
-        , apply = newApply
-        , arrayFunction = newFuncArray
-        , itemsFromAcc =
-            { get = itemsFromAcc.get >> Tuple.second
-            , map = Tuple.mapSecond >> itemsFromAcc.map
-            }
-        }
-
-
-{-| -}
-end : UnfinishedSystem world acc () (acc -> acc) -> world
-end (UnfinishedSystem { world, acc, arrayFunction, apply }) =
-    Array.foldl
-        (\f acc_ ->
-            Maybe.map (\f_ -> f_ acc_) f
-                |> Maybe.withDefault acc_
+indexedFoldl4 :
+    (EntityID -> comp1 -> comp2 -> comp3 -> comp4 -> acc -> acc)
+    -> Component.Set comp1
+    -> Component.Set comp2
+    -> Component.Set comp3
+    -> Component.Set comp4
+    -> acc
+    -> acc
+indexedFoldl4 f comp1 comp2 comp3 comp4 acc_ =
+    indexedFoldlArray
+        (\n value acc ->
+            Maybe.map4 (\a b c d -> f n a b c d acc)
+                value
+                (Component.get n comp2)
+                (Component.get n comp3)
+                (Component.get n comp4)
+                |> Maybe.withDefault acc
         )
-        (acc ())
-        arrayFunction
-        |> apply world
+        acc_
+        comp1
 
 
-{-| -}
-endCustom : custom -> UnfinishedSystem world acc () (( acc, custom ) -> ( acc, custom )) -> ( world, custom )
-endCustom custom (UnfinishedSystem { world, acc, arrayFunction, apply }) =
-    Array.foldl
-        (\f acc_ ->
-            Maybe.map (\f_ -> f_ acc_) f
-                |> Maybe.withDefault acc_
+{-| Same as [`foldl2`](#foldl2) only with 5 components
+-}
+foldl5 :
+    (comp1 -> comp2 -> comp3 -> comp4 -> acc -> acc)
+    -> Component.Set comp1
+    -> Component.Set comp2
+    -> Component.Set comp3
+    -> Component.Set comp4
+    -> acc
+    -> acc
+foldl5 f comp1 comp2 comp3 comp4 acc_ =
+    indexedFoldlArray
+        (\n value acc ->
+            Maybe.map4 (\a b c d -> f a b c d acc)
+                value
+                (Component.get n comp2)
+                (Component.get n comp3)
+                (Component.get n comp4)
+                |> Maybe.withDefault acc
         )
-        ( acc (), custom )
-        arrayFunction
-        |> Tuple.mapFirst (apply world)
+        acc_
+        comp1
 
 
-{-| single component mapping, same as List.map - only for `Component.Set` inside `World`
+{-| Same as [`indexedFoldl2`](#indexedFoldl2) only with 5 components
+-}
+indexedFoldl5 :
+    (EntityID -> comp1 -> comp2 -> comp3 -> comp4 -> comp5 -> acc -> acc)
+    -> Component.Set comp1
+    -> Component.Set comp2
+    -> Component.Set comp3
+    -> Component.Set comp4
+    -> Component.Set comp5
+    -> acc
+    -> acc
+indexedFoldl5 f comp1 comp2 comp3 comp4 comp5 acc_ =
+    indexedFoldlArray
+        (\n value acc ->
+            Maybe.map5 (\a b c d e -> f n a b c d e acc)
+                value
+                (Component.get n comp2)
+                (Component.get n comp3)
+                (Component.get n comp4)
+                (Component.get n comp5)
+                |> Maybe.withDefault acc
+        )
+        acc_
+        comp1
+
+
+{-| Single component mapping, Same as`List.map` - only for `Component.Set` inside `World`
+
+    gravitySystem =
+        Logic.System.step (Vec2.add gravity) accelerationSpec
+
 -}
 step : (comp -> comp) -> Component.Spec comp world -> System world
 step f { get, set } world =
     set (get world |> Array.map (Maybe.map f)) world
 
 
-{-| -}
-type alias SetsReducer2 a b acc =
-    ( a, a -> acc -> acc )
-    -> ( b, b -> acc -> acc )
-    -> acc
-    -> acc
+{-| Step over all entities that have both components.
 
+Example:
 
-{-| Example:
-
-    system : Logic.Component.Spec Velocity world -> Logic.Component.Spec Position world -> System world
-       system =
-           Logic.System.step2
-               (\( velocity, _ ) ( pos, setPos ) -> setPos (Vec2.add velocity pos))
+    system =
+        Logic.System.step2
+            (\( v, _ ) ( p, setP ) -> setP (Vec2.add v p))
+            velocitySpec
+            positionSpec
 
 -}
 step2 :
-    SetsReducer2 a b { a : Component.Set a, b : Component.Set b }
-    -> Component.Spec a world
-    -> Component.Spec b world
+    (( comp1, comp1 -> System { c | a : Component.Set comp1 } )
+     -> ( comp2, comp2 -> System { d | b : Component.Set comp2 } )
+     -> System { a : Component.Set comp1, b : Component.Set comp2 }
+    )
+    -> Component.Spec comp1 world
+    -> Component.Spec comp2 world
     -> System world
 step2 f spec1 spec2 world =
     let
@@ -346,16 +277,10 @@ step2 f spec1 spec2 world =
 
         result =
             indexedFoldlArray
-                (\n value1 acc ->
-                    value1
-                        |> Maybe.andThen
-                            (\a ->
-                                Array.get n acc.b
-                                    |> (Maybe.map >> Maybe.andThen)
-                                        (\b ->
-                                            f ( a, set1 n ) ( b, set2 n ) acc
-                                        )
-                            )
+                (\n value acc ->
+                    Maybe.map2 (\a b -> f ( a, set1 n ) ( b, set2 n ) acc)
+                        value
+                        (Component.get n acc.b)
                         |> Maybe.withDefault acc
                 )
                 combined
@@ -366,43 +291,22 @@ step2 f spec1 spec2 world =
         |> applyIf (result.b /= combined.b) (spec2.set result.b)
 
 
-{-| -}
-applyIf : Bool -> (a -> a) -> a -> a
-applyIf bool f world =
-    if bool then
-        f world
-
-    else
-        world
-
-
-{-| -}
-applyMaybe : Maybe a -> (a -> c -> c) -> c -> c
-applyMaybe m f world =
-    case m of
-        Just a ->
-            f a world
-
-        Nothing ->
-            world
-
-
-{-| -}
-type alias SetsReducer3 a b c acc =
-    ( a, a -> acc -> acc )
-    -> ( b, b -> acc -> acc )
-    -> ( c, c -> acc -> acc )
-    -> acc
-    -> acc
-
-
-{-| same as [`step2`](#step2) only with 3 components
+{-| Same as [`step2`](#step2) only with 3 components
 -}
 step3 :
-    SetsReducer3 a b c { a : Component.Set a, b : Component.Set b, c : Component.Set c }
-    -> Component.Spec a world
-    -> Component.Spec b world
-    -> Component.Spec c world
+    (( comp1, comp1 -> System { a | a : Component.Set comp1 } )
+     -> ( comp2, comp2 -> System { a | b : Component.Set comp2 } )
+     -> ( comp3, comp3 -> System { a | c : Component.Set comp3 } )
+     ->
+        System
+            { a : Component.Set comp1
+            , b : Component.Set comp2
+            , c : Component.Set comp3
+            }
+    )
+    -> Component.Spec comp1 world
+    -> Component.Spec comp2 world
+    -> Component.Spec comp3 world
     -> System world
 step3 f spec1 spec2 spec3 world =
     let
@@ -420,20 +324,12 @@ step3 f spec1 spec2 spec3 world =
 
         result =
             indexedFoldlArray
-                (\n value1 acc ->
-                    value1
-                        |> Maybe.andThen
-                            (\a ->
-                                (Maybe.andThen >> Maybe.andThen)
-                                    (\b ->
-                                        (Maybe.map >> Maybe.andThen)
-                                            (\c ->
-                                                f ( a, set1 n ) ( b, set2 n ) ( c, set3 n ) acc
-                                            )
-                                            (Array.get n acc.c)
-                                    )
-                                    (Array.get n acc.b)
-                            )
+                (\n value acc ->
+                    Maybe.map3
+                        (\a b c -> f ( a, set1 n ) ( b, set2 n ) ( c, set3 n ) acc)
+                        value
+                        (Component.get n acc.b)
+                        (Component.get n acc.c)
                         |> Maybe.withDefault acc
                 )
                 combined
@@ -445,24 +341,25 @@ step3 f spec1 spec2 spec3 world =
         |> applyIf (result.c /= combined.c) (spec3.set result.c)
 
 
-{-| -}
-type alias SetsReducer4 a b c d acc =
-    ( a, a -> acc -> acc )
-    -> ( b, b -> acc -> acc )
-    -> ( c, c -> acc -> acc )
-    -> ( d, d -> acc -> acc )
-    -> acc
-    -> acc
-
-
-{-| same as [`step2`](#step2) only with 4 components
+{-| Same as [`step2`](#step2) only with 4 components
 -}
 step4 :
-    SetsReducer4 a b c d { a : Component.Set a, b : Component.Set b, c : Component.Set c, d : Component.Set d }
-    -> Component.Spec a world
-    -> Component.Spec b world
-    -> Component.Spec c world
-    -> Component.Spec d world
+    (( comp1, comp1 -> System { a | a : Component.Set comp1 } )
+     -> ( comp2, comp2 -> System { a | b : Component.Set comp2 } )
+     -> ( comp3, comp3 -> System { a | c : Component.Set comp3 } )
+     -> ( comp4, comp4 -> System { a | d : Component.Set comp4 } )
+     ->
+        System
+            { a : Component.Set comp1
+            , b : Component.Set comp2
+            , c : Component.Set comp3
+            , d : Component.Set comp4
+            }
+    )
+    -> Component.Spec comp1 world
+    -> Component.Spec comp2 world
+    -> Component.Spec comp3 world
+    -> Component.Spec comp4 world
     -> System world
 step4 f spec1 spec2 spec3 spec4 world =
     let
@@ -487,24 +384,13 @@ step4 f spec1 spec2 spec3 spec4 world =
 
         result =
             indexedFoldlArray
-                (\n value1 acc ->
-                    Maybe.andThen
-                        (\a ->
-                            (Maybe.andThen >> Maybe.andThen)
-                                (\b ->
-                                    (Maybe.andThen >> Maybe.andThen)
-                                        (\c ->
-                                            (Maybe.map >> Maybe.andThen)
-                                                (\d ->
-                                                    f ( a, set1 n ) ( b, set2 n ) ( c, set3 n ) ( d, set4 n ) acc
-                                                )
-                                                (Array.get n acc.d)
-                                        )
-                                        (Array.get n acc.c)
-                                )
-                                (Array.get n acc.b)
-                        )
-                        value1
+                (\n value acc ->
+                    Maybe.map4
+                        (\a b c d -> f ( a, set1 n ) ( b, set2 n ) ( c, set3 n ) ( d, set4 n ) acc)
+                        value
+                        (Component.get n acc.b)
+                        (Component.get n acc.c)
+                        (Component.get n acc.d)
                         |> Maybe.withDefault acc
                 )
                 combined
@@ -517,13 +403,108 @@ step4 f spec1 spec2 spec3 spec4 world =
         |> applyIf (result.d /= combined.d) (spec4.set result.d)
 
 
-{-| -}
-filterMap : (comp -> Maybe comp) -> Component.Set comp -> Component.Set comp
-filterMap f comps =
-    Array.map (Maybe.andThen f) comps
+{-| Same as [`step2`](#step2) only with 5 components
+-}
+step5 :
+    (( comp1, comp1 -> System { a | a : Component.Set comp1 } )
+     -> ( comp2, comp2 -> System { a | b : Component.Set comp2 } )
+     -> ( comp3, comp3 -> System { a | c : Component.Set comp3 } )
+     -> ( comp4, comp4 -> System { a | d : Component.Set comp4 } )
+     -> ( comp5, comp5 -> System { a | e : Component.Set comp5 } )
+     ->
+        System
+            { a : Component.Set comp1
+            , b : Component.Set comp2
+            , c : Component.Set comp3
+            , d : Component.Set comp4
+            , e : Component.Set comp5
+            }
+    )
+    -> Component.Spec comp1 world
+    -> Component.Spec comp2 world
+    -> Component.Spec comp3 world
+    -> Component.Spec comp4 world
+    -> Component.Spec comp5 world
+    -> System world
+step5 f spec1 spec2 spec3 spec4 spec5 world =
+    let
+        set1 i a acc =
+            { acc | a = Array.set i (Just a) acc.a }
+
+        set2 i b acc =
+            { acc | b = Array.set i (Just b) acc.b }
+
+        set3 i c acc =
+            { acc | c = Array.set i (Just c) acc.c }
+
+        set4 i d acc =
+            { acc | d = Array.set i (Just d) acc.d }
+
+        set5 i e acc =
+            { acc | e = Array.set i (Just e) acc.e }
+
+        combined =
+            { a = spec1.get world
+            , b = spec2.get world
+            , c = spec3.get world
+            , d = spec4.get world
+            , e = spec5.get world
+            }
+
+        result =
+            indexedFoldlArray
+                (\n value acc ->
+                    Maybe.map5
+                        (\a b c d e -> f ( a, set1 n ) ( b, set2 n ) ( c, set3 n ) ( d, set4 n ) ( e, set5 n ) acc)
+                        value
+                        (Component.get n acc.b)
+                        (Component.get n acc.c)
+                        (Component.get n acc.d)
+                        (Component.get n acc.e)
+                        |> Maybe.withDefault acc
+                )
+                combined
+                combined.a
+    in
+    world
+        |> applyIf (result.a /= combined.a) (spec1.set result.a)
+        |> applyIf (result.b /= combined.b) (spec2.set result.b)
+        |> applyIf (result.c /= combined.c) (spec3.set result.c)
+        |> applyIf (result.d /= combined.d) (spec4.set result.d)
 
 
-{-| -}
-map : (comp -> comp) -> EntityID -> Component.Set comp -> Component.Set comp
-map f i comps =
-    Array.set i (Entity.get i comps |> Maybe.map f) comps
+{-| Just nice helper function to pipe into systems
+
+    update msg world =
+        world
+            |> system1
+            |> applyIf (msg === KeyUp "a") systemMoveLeft
+            |> system2
+
+-}
+applyIf : Bool -> (a -> a) -> a -> a
+applyIf bool f world =
+    if bool then
+        f world
+
+    else
+        world
+
+
+{-| Same as [`applyIf`](#applyIf), but works with `Maybe`
+
+    update msg world =
+        world
+            |> system1
+            |> applyMaybe (decode saveDecoder msg) loadGame
+            |> system2
+
+-}
+applyMaybe : Maybe a -> (a -> c -> c) -> c -> c
+applyMaybe m f world =
+    case m of
+        Just a ->
+            f a world
+
+        Nothing ->
+            world

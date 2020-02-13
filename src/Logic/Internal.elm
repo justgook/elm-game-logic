@@ -64,11 +64,7 @@ apply fs xs =
 
 update : Int -> (a -> a) -> Array a -> Array a
 update n f a =
-    let
-        element =
-            Array.get n a
-    in
-    case element of
+    case Array.get n a of
         Nothing ->
             a
 
