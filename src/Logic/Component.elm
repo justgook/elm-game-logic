@@ -48,7 +48,7 @@ import Dict exposing (Dict)
 import Logic.Internal exposing (indexedFoldlArray)
 
 
-{-| Component storage, main building block of world
+{-| Component storage, the main building block of the world
 -}
 type alias Set comp =
     Array (Maybe comp)
@@ -58,7 +58,7 @@ type alias EntityID =
     Int
 
 
-{-| Component specification, how to get `Component.Set` from world and set back into world (mainly used by Systems)
+{-| Component specification, how to get `Component.Set` from the world and set back into the world (mainly used by Systems)
 -}
 type alias Spec comp world =
     { get : world -> Set comp
@@ -66,7 +66,7 @@ type alias Spec comp world =
     }
 
 
-{-| Create empty `Component.Set` - mostly used to init component sets in world.
+{-| Create an empty `Component.Set` - mostly used to init component sets in the world.
 -}
 empty : Set comp
 empty =
@@ -80,7 +80,7 @@ remove entityID components =
     Array.set entityID Nothing components
 
 
-{-| Safe way to create component, same as `set`, only if index is out of range `Component.Set` will be stretched.
+{-| Safe way to create a component, same as `set`, only if an index is out of range `Component.Set` will be stretched.
 
     test =
         -- Just 5
@@ -132,7 +132,7 @@ filterMap f comps =
     Array.map (Maybe.andThen f) comps
 
 
-{-| Apply a function on every component in an `Component.Set`.
+{-| Apply a function on every component in a `Component.Set`.
 
     map sqrt (fromList [ ( 0, 1 ), ( 1, 4 ), ( 2, 9 ) ])
         |> (==) fromList [ ( 0, 1 ), ( 1, 2 ), ( 2, 3 ) ]

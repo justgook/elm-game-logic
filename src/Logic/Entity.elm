@@ -1,6 +1,6 @@
 module Logic.Entity exposing (EntityID, create, with, remove)
 
-{-| **Entity**: The entity is a general purpose object. It only consists of a unique id. They "tag every coarse gameobject as a separate item".
+{-| **Entity**: The entity is a general-purpose object. It only consists of a unique ID. They "tag every coarse game object as a separate item".
 Example:
 
     Entity.create id world
@@ -33,7 +33,7 @@ create id world =
 
 
 {-| Way to create `Entity` destruction functions, should pipe in all possible component specs.
-Also can be used to just disable (remove) some components from entity.
+It also can be used to just disable (remove) some components from an entity.
 
     remove =
         Entity.remove positionSpec
@@ -48,7 +48,7 @@ remove spec ( entityID, world ) =
     ( entityID, spec.set (Array.set entityID Nothing (spec.get world)) world )
 
 
-{-| Set component to spawn with new entity
+{-| Set component to spawn with a new entity
 
     Entity.create ( id, world )
         |> Entity.with ( positionSpec, positionComponent )

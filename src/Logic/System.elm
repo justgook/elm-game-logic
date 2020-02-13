@@ -6,7 +6,7 @@ module Logic.System exposing
     , applyIf, applyMaybe
     )
 
-{-| **System**: main logic driver, that is used to step on each game-loop and update `World`
+{-| **System**: main logic driver, that is used to stepping on each game-loop and update `World`
 
 @docs System
 @docs update, step, step2, step3, step4, step5
@@ -39,9 +39,9 @@ type alias System world =
     world -> world
 
 
-{-| Reduce an `Component.Set` from the left.
+{-| Reduce a `Component.Set` from the left.
 
-Example count how much enemies left in world:
+Example count how much enemies left in the world:
 
     enemySet =
         enemySpec.get world
