@@ -3,7 +3,7 @@
     "name": "justgook/elm-game-logic",
     "summary": "An ECS library for Elm. Provides an easy way to build a full game",
     "license": "BSD-3-Clause",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "exposed-modules": [
         "Logic.System",
         "Logic.Entity",

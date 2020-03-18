@@ -245,6 +245,12 @@ step f { get, set } world =
     set (get world |> Array.map (Maybe.map f)) world
 
 
+type alias Acc2 a b =
+    { a : Component.Set a
+    , b : Component.Set b
+    }
+
+
 {-| Step over all entities that have both components.
 
 Example:
@@ -257,12 +263,12 @@ Example:
 
 -}
 step2 :
-    (( comp1, comp1 -> System { c | a : Component.Set comp1 } )
-     -> ( comp2, comp2 -> System { d | b : Component.Set comp2 } )
-     -> System { a : Component.Set comp1, b : Component.Set comp2 }
+    (( a, a -> System (Acc2 a b) )
+     -> ( b, b -> System (Acc2 a b) )
+     -> System (Acc2 a b)
     )
-    -> Component.Spec comp1 world
-    -> Component.Spec comp2 world
+    -> Component.Spec a world
+    -> Component.Spec b world
     -> System world
 step2 f spec1 spec2 world =
     let
@@ -291,22 +297,24 @@ step2 f spec1 spec2 world =
         |> applyIf (result.b /= combined.b) (spec2.set result.b)
 
 
+type alias Acc3 a b c =
+    { a : Component.Set a
+    , b : Component.Set b
+    , c : Component.Set c
+    }
+
+
 {-| Same as [`step2`](#step2) only with 3 components
 -}
 step3 :
-    (( comp1, comp1 -> System { a | a : Component.Set comp1 } )
-     -> ( comp2, comp2 -> System { a | b : Component.Set comp2 } )
-     -> ( comp3, comp3 -> System { a | c : Component.Set comp3 } )
-     ->
-        System
-            { a : Component.Set comp1
-            , b : Component.Set comp2
-            , c : Component.Set comp3
-            }
+    (( a, a -> System (Acc3 a b c) )
+     -> ( b, b -> System (Acc3 a b c) )
+     -> ( c, c -> System (Acc3 a b c) )
+     -> System (Acc3 a b c)
     )
-    -> Component.Spec comp1 world
-    -> Component.Spec comp2 world
-    -> Component.Spec comp3 world
+    -> Component.Spec a world
+    -> Component.Spec b world
+    -> Component.Spec c world
     -> System world
 step3 f spec1 spec2 spec3 world =
     let
@@ -341,25 +349,27 @@ step3 f spec1 spec2 spec3 world =
         |> applyIf (result.c /= combined.c) (spec3.set result.c)
 
 
+type alias Acc4 a b c d =
+    { a : Component.Set a
+    , b : Component.Set b
+    , c : Component.Set c
+    , d : Component.Set d
+    }
+
+
 {-| Same as [`step2`](#step2) only with 4 components
 -}
 step4 :
-    (( comp1, comp1 -> System { a | a : Component.Set comp1 } )
-     -> ( comp2, comp2 -> System { a | b : Component.Set comp2 } )
-     -> ( comp3, comp3 -> System { a | c : Component.Set comp3 } )
-     -> ( comp4, comp4 -> System { a | d : Component.Set comp4 } )
-     ->
-        System
-            { a : Component.Set comp1
-            , b : Component.Set comp2
-            , c : Component.Set comp3
-            , d : Component.Set comp4
-            }
+    (( a, a -> System (Acc4 a b c d) )
+     -> ( b, b -> System (Acc4 a b c d) )
+     -> ( c, c -> System (Acc4 a b c d) )
+     -> ( d, d -> System (Acc4 a b c d) )
+     -> System (Acc4 a b c d)
     )
-    -> Component.Spec comp1 world
-    -> Component.Spec comp2 world
-    -> Component.Spec comp3 world
-    -> Component.Spec comp4 world
+    -> Component.Spec a world
+    -> Component.Spec b world
+    -> Component.Spec c world
+    -> Component.Spec d world
     -> System world
 step4 f spec1 spec2 spec3 spec4 world =
     let
@@ -403,28 +413,30 @@ step4 f spec1 spec2 spec3 spec4 world =
         |> applyIf (result.d /= combined.d) (spec4.set result.d)
 
 
+type alias Acc5 a b c d e =
+    { a : Component.Set a
+    , b : Component.Set b
+    , c : Component.Set c
+    , d : Component.Set d
+    , e : Component.Set e
+    }
+
+
 {-| Same as [`step2`](#step2) only with 5 components
 -}
 step5 :
-    (( comp1, comp1 -> System { a | a : Component.Set comp1 } )
-     -> ( comp2, comp2 -> System { a | b : Component.Set comp2 } )
-     -> ( comp3, comp3 -> System { a | c : Component.Set comp3 } )
-     -> ( comp4, comp4 -> System { a | d : Component.Set comp4 } )
-     -> ( comp5, comp5 -> System { a | e : Component.Set comp5 } )
-     ->
-        System
-            { a : Component.Set comp1
-            , b : Component.Set comp2
-            , c : Component.Set comp3
-            , d : Component.Set comp4
-            , e : Component.Set comp5
-            }
+    (( a, a -> System (Acc5 a b c d e) )
+     -> ( b, b -> System (Acc5 a b c d e) )
+     -> ( c, c -> System (Acc5 a b c d e) )
+     -> ( d, d -> System (Acc5 a b c d e) )
+     -> ( e, e -> System (Acc5 a b c d e) )
+     -> System (Acc5 a b c d e)
     )
-    -> Component.Spec comp1 world
-    -> Component.Spec comp2 world
-    -> Component.Spec comp3 world
-    -> Component.Spec comp4 world
-    -> Component.Spec comp5 world
+    -> Component.Spec a world
+    -> Component.Spec b world
+    -> Component.Spec c world
+    -> Component.Spec d world
+    -> Component.Spec e world
     -> System world
 step5 f spec1 spec2 spec3 spec4 spec5 world =
     let
