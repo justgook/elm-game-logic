@@ -1,4 +1,6 @@
 # Game Logic
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fjustgook%2Felm-game-logic.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fjustgook%2Felm-game-logic?ref=badge_shield)
+
 
 An ECS library for Elm. `Logic` provides an easy way to build a full game, using common Entity-Component-System architecture.
 
@@ -35,3 +37,7 @@ system =
     Logic.System.step2
         (\( velocity, _ ) ( pos, setPos ) -> setPos (Vec2.add velocity pos))
 ```
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fjustgook%2Felm-game-logic.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fjustgook%2Felm-game-logic?ref=badge_large)
