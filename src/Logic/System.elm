@@ -483,6 +483,7 @@ step5 f spec1 spec2 spec3 spec4 spec5 world =
         |> applyIf (result.b /= combined.b) (spec2.set result.b)
         |> applyIf (result.c /= combined.c) (spec3.set result.c)
         |> applyIf (result.d /= combined.d) (spec4.set result.d)
+        |> applyIf (result.e /= combined.e) (spec5.set result.e)
 
 
 {-| Just nice helper function to pipe into systems
